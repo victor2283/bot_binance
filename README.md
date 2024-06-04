@@ -1,15 +1,15 @@
 # bot_binance
-version 3 of the binance bot with technical indicators and strategies implemented. developed in python
+Version 3 of the binance bot with technical indicators and strategies implemented. developed in python
 
-requires the following packages for its operation: Package Version
+Requires the following packages for its operation: Package Version:
 
-binance-connector
-matplotlib
-pandas
-TA-Lib
-time
+* binance-connector, 
+* matplotlib, 
+* pandas, 
+* TA-Lib,
+* time,
 
-and a config.py file of the binance credentials previously created with super user permissions in the following format: api_key="" api_secret="" replace the "" with your key between ""
+And a config.py file of the binance credentials previously created with super user permissions in the following format: api_key="" api_secret="" replace the "" with your key between ""
 
 The application works very easily, it looks for the lowest price when the mfi indicator and the bollinger band are in the "up" state and the trading alert is "up", when this occurs it creates an order at a price that is 0.06 percent higher higher than that price because when the trend changes and the price begins to rise the buy order is completed, then when it reaches the top of bollinger it asks if the status is down and the mfi and the alert are also down and looks for the price highest possible and creates a sell order below the highest price that meets the condition that this sale price is greater than the purchase price and also greater than the binance commission which is 0.166 percent and if this is met the The order is completed at the moment the price begins to fall, and also has an emergency stop loss option where the trend changes more than 0.16 percent downward due to the collapse of the bullish trend and the asset is showing a loss. to sell immediately and look to buy much lower on the price list.
 
