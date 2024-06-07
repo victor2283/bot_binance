@@ -2,7 +2,7 @@ import config
 from binance.spot import Spot
 import talib as ta
 import time
-
+import pandas as pd
 class BotBinance:
     __api_key = config.api_key
     __api_secret = config.api_secret
@@ -254,26 +254,26 @@ class BotBinance:
 
         return float(exchange_rates.get(pair, 0))
     
-    def config_bands(self, closes_serie, timeperiod, upperband, lowerband, perc_max, perc_min):
-        cant = 0.035
-        cont_nbdevup = 2
-        cont_nbdevdn = 2
-        while not (perc_min <= self.percPro(price=upperband.iloc[-1], last_price=lowerband.iloc[-1]) <= perc_max):
-            # Ajustar las bandas según si el porcentaje está por encima o por debajo del rango
-            if self.percPro(price=upperband.iloc[-1], last_price=lowerband.iloc[-1]) > perc_max:
-                cont_nbdevup -= cant  # decrementar para acercar las bandas
-                cont_nbdevdn -= cant
-            else:
-                cont_nbdevup += cant  # incrementar para separar las bandas
-                cont_nbdevdn += cant
-
-            upperband, middleband, lowerband = ta.BBANDS(closes_serie, timeperiod=timeperiod, nbdevup=cont_nbdevup, nbdevdn=cont_nbdevdn)
-            #print(f"ajustando bandas: { round(self.percPro(price=upperband.iloc[-1], last_price=lowerband.iloc[-1]), 2)}% | nbdevup={round(cont_nbdevup,2)}, nbdevdn={round(cont_nbdevdn,2)}")
-
-        return {
-            "upperband": upperband,
-            "middleband": middleband,
-            "lowerband": lowerband,
-            "nbdevup": cont_nbdevup,
-            "nbdevdn": cont_nbdevdn
-        }
+    
+    def series(self, closes):
+        return pd.Series(closes)
+    def SMA(self, closes_serie, timeperiod:float = 20):
+        return ta.SMA(closes_serie, timeperiod=timeperiod)
+    
+    def RSI(self, closes_serie, timeperiod:float = 20):
+        return ta.RSI(closes_serie, timeperiod=timeperiod)
+    
+    def MACD(self, closes_serie, fastperiod:float = 90, slowperiod:float = 15, signalperiod:float = 20):
+        return ta.MACD(closes_serie, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod)
+    
+    def MFI(self, highs_serie,  lows_serie, closes_serie, volume_serie,  timeperiod:float = 20):
+        return ta.MFI(highs_serie, lows_serie, closes_serie, volume_serie ,  timeperiod=timeperiod)
+    
+    def DEMA(self, closes_serie, timeperiod:float = 20):
+        return ta.DEMA(closes_serie, timeperiod=timeperiod)
+    
+    def BBANDS(self, closes_serie, timeperiod:float = 20, nbdevup: int = 2, nbdevdn:int = 2, matype:int =0):
+        return ta.BBANDS(closes_serie, timeperiod=timeperiod, nbdevup=nbdevup, nbdevdn=nbdevdn, matype=matype)
+    def show_list(self, column: str, data):
+        return list(map(lambda v: v[column], data))
+    
