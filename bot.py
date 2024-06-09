@@ -1,4 +1,5 @@
 import config
+from pprint import pprint
 from binance.spot import Spot
 import talib as ta
 import time
@@ -29,15 +30,18 @@ class BotBinance:
                              "symbol": self.symbol, "interval": self.interval, "limit": self.limit})
         v = data[0]
         candle = {'Open_time': int(v[0]), 'Open_price': float(v[1]), 'High_price': float(
-            v[2]), 'Low_price': float(v[3]), 'closing_prices': float(v[4]), "Volume": float(v[5])}
+            v[2]), 'Low_price': float(v[3]), 'Close_price': float(v[4]), "Volume": float(v[5])}
         candles.append(candle)
         candles.pop(0)
         #print(len(candles))
         return candles
+
+
+
     def candlestick(self):
         candles = self._request(endpoint="klines", parameters={
                                 "symbol": self.symbol, "interval": self.interval, "limit": self.limit})
-        return list(map(lambda v: {'Open_time': int(v[0]), 'Open_price': float(v[1]), 'High_price': float(v[2]), 'Low_price': float(v[3]), 'closing_prices': float(v[4]), "Volume": float(v[5])}, candles))
+        return list(map(lambda v: {'Open_time': int(v[0]), 'Open_price': float(v[1]), 'High_price': float(v[2]), 'Low_price': float(v[3]), 'Close_price': float(v[4]), "Volume": float(v[5])}, candles))
 
     def new_order(self, side: str,  type: str, quantity: float = 0, price: float = 0, stopPrice: float = 0, mode: int = 1):
         timestamp = int(time.time()*1000)
@@ -276,4 +280,95 @@ class BotBinance:
         return ta.BBANDS(closes_serie, timeperiod=timeperiod, nbdevup=nbdevup, nbdevdn=nbdevdn, matype=matype)
     def show_list(self, column: str, data):
         return list(map(lambda v: v[column], data))
+
+    def heikin_ashi(self, candles):
+        
+        ha_open = []
+        ha_high = []
+        ha_low = []
+        ha_close = []
+
+        if len(candles) <= 1:
+            return ha_open, ha_high, ha_low, ha_close
+
+        prev_close = candles[0]['Close_price']
+        for candle in candles[1:]:
+            open_price = (prev_close + candle['Open_price']) / 2
+            close_price = (open_price + candle['High_price'] + candle['Low_price'] + candle['Close_price']) / 4
+            high_price = max(open_price, candle['High_price'], close_price, candle['Low_price'])
+            low_price = min(open_price, candle['High_price'], close_price, candle['Low_price'])
+
+            ha_open.append(open_price)
+            ha_high.append(high_price)
+            ha_low.append(low_price)
+            ha_close.append(close_price)
+
+            prev_close = close_price
+
+        return ha_open, ha_high, ha_low, ha_close
+    
+    def identify_exit_signal(self, ha_open, ha_close, ha_high, ha_low, n=5): #Identifica una señal de salida en tendencia alcista.
+         # Considera las últimas n velas para la señal de salida
+        exit_signals = []
+        for i in range(-n, 0):
+            last_open = ha_open[i]
+            last_close = ha_close[i]
+            last_high = ha_high[i]
+            last_low = ha_low[i]
+            body_size = abs(last_close - last_open)
+            shadow_size = last_high - last_low
+            exit_signals.append(body_size < shadow_size / 2)
+        return sum(exit_signals) > n / 2
+
+    def analyze_trend_and_signals(self, candles):  #Analiza la tendencia actual, punto de entrada y punto de salida en base a la última vela Heikin-Ashi.
+        ha_open, ha_high, ha_low, ha_close = self.heikin_ashi(candles)
+        trend = self.identify_current_trend(ha_open, ha_close, ha_high, ha_low)
+        entry_signal = self.identify_bullish_entry_signal(ha_open, ha_close) 
+        exit_signal = self.identify_exit_signal(ha_open, ha_close, ha_high, ha_low) 
+        return trend, entry_signal, exit_signal
+
+    def identify_bullish_entry_signal(self, ha_open, ha_close, n=5):  #Identifica una señal de entrada en tendencia alcista.
+        # Considera las últimas n velas para la señal de entrada
+        entry_signals = []
+        for i in range(-n, 0):
+            last_open = ha_open[i]
+            last_close = ha_close[i]
+            entry_signals.append(last_close > last_open)
+        return sum(entry_signals) > n / 2
+
+
+    def identify_current_trend(self, ha_open, ha_close, ha_high, ha_low):
+        # Utilizar un historial de tendencias recientes para suavizar las transiciones
+        trends = []
+
+        for i in range(len(ha_open)):
+            body_size = abs(ha_close[i] - ha_open[i])
+            shadow_size = ha_high[i] - ha_low[i]
+            if ha_close[i] > ha_open[i]:
+                trends.append('up')
+            elif ha_close[i] < ha_open[i]:
+                trends.append('down')
+            else:
+                if shadow_size > 2 * body_size:
+                    trends.append('consolidation')
+                else:
+                    trends.append('neutral')
+
+        # Determinar la tendencia actual basándose en el historial reciente
+        if trends[-1] == 'up' and trends[-2] == 'up':
+            return 'up'
+        elif trends[-1] == 'down' and trends[-2] == 'down':
+            return 'down'
+        else:
+            body_size = abs(ha_close[-1] - ha_open[-1])
+            shadow_size = ha_high[-1] - ha_low[-1]
+            if shadow_size > 2 * body_size:
+                return 'consolidation'
+            else:
+                return 'neutral'
+
+
+
+    
+    
     
