@@ -6,7 +6,7 @@ import time
 #import matplotlib.pyplot as plt
 #import random
 
-mode_Soft=1 # modo 0 como demo - modo 1 produccion con datos reales
+mode_Soft=0 # modo 0 como demo - modo 1 produccion con datos reales
 asset_primary = "BTC"
 asset_secundary="TRY"
 #asset_secundary="ARS"
@@ -42,14 +42,17 @@ while True:
     alert_trading_band=""
     alert_trading_mfi=""
     alert_trading_dema=""
-    closes= bot.show_list(column='closing_prices', data=candles)
-    volume = bot.show_list(column='Volume', data=candles)
-    lows = bot.show_list(column='Low_price', data=candles)
     highs = bot.show_list(column='High_price', data=candles)
+    lows = bot.show_list(column='Low_price', data=candles)
+    closes= bot.show_list(column='Close_price', data=candles)
+    volume = bot.show_list(column='Volume', data=candles)
     closes_serie =  bot.series(closes)
     highs_serie = bot.series(highs)
     lows_serie = bot.series(lows)
     volume_serie = bot.series(volume)
+    
+    
+    
     smaShort = bot.SMA(closes_serie=closes_serie, timeperiod=sPd)
     smaMedium = bot.SMA(closes_serie=closes_serie, timeperiod=mPd)
     smaLong = bot.SMA(closes_serie=closes_serie, timeperiod=lPd)
@@ -136,6 +139,8 @@ while True:
             perc_stop_loss= round(float(bot.percPro(last_price=price_buy, price=price)),2)
             print(f" Trade: [{sTrade}] | alert:[{alert_trading}] band:[{alert_trading_band}] mfi:[{alert_trading_mfi}]| Price: {round(price_market,2)} | {msg} |  buy price: {price_buy} porc:{perc_stop_loss} perc_bands:{perc_bands}")
             
+            trend, entry_signal, exit_signal = bot.analyze_trend_and_signals(candles=candles)
+            print(f" trend: {trend} | entry signal: {entry_signal}  | exit_ signal: {exit_signal}")        
             if   price_market < lowerband.iloc[-1] and alert_trading_mfi==alert_trading_band == "up"  and perc_bands > perc_binance*3: 
                 print(f" buscando precio de compra... al precio: {last_price_market} | alert: {alert_trading_band}")
                 buy_quantity =float(math.floor(fiat / price_market/price_min_sell)* price_min_sell) # calculo market buy
