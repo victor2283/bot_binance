@@ -4,7 +4,6 @@ from binance.spot import Spot
 import talib as ta
 import time
 import pandas as pd
-import numpy as np
 class BotBinance:
     __api_key = config.api_key
     __api_secret = config.api_secret
@@ -271,6 +270,9 @@ class BotBinance:
     def MACD(self, closes_serie, fastperiod:float = 90, slowperiod:float = 15, signalperiod:float = 20):
         return ta.MACD(closes_serie, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod)
     
+    def MFI(self, highs_serie,  lows_serie, closes_serie, volume_serie,  timeperiod:float = 20):
+        return ta.MFI(highs_serie, lows_serie, closes_serie, volume_serie ,  timeperiod=timeperiod)
+    
     def DEMA(self, closes_serie, timeperiod:float = 20):
         return ta.DEMA(closes_serie, timeperiod=timeperiod)
     
@@ -278,17 +280,6 @@ class BotBinance:
         return ta.BBANDS(closes_serie, timeperiod=timeperiod, nbdevup=nbdevup, nbdevdn=nbdevdn, matype=matype)
     def show_list(self, column: str, data):
         return list(map(lambda v: v[column], data))
-
-    def MFI(self, highs,  lows, closes, volume,  timeperiod:float = 14):
-        typical_price = (highs + lows + closes) / 3
-        raw_money_flow = typical_price * volume
-        positive_flow = np.where(typical_price.diff() > 0, raw_money_flow, 0)
-        negative_flow = np.where(typical_price.diff() < 0, raw_money_flow, 0)
-        positive_mf = pd.Series(positive_flow).rolling(window=timeperiod, min_periods=1).sum()
-        negative_mf = pd.Series(negative_flow).rolling(window=timeperiod, min_periods=1).sum()
-        money_ratio = positive_mf / negative_mf
-        mfi = 100 - (100 / (1 + money_ratio))
-        return mfi
 
     def heikin_ashi(self, candles):
         
