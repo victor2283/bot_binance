@@ -4,6 +4,7 @@ from binance.spot import Spot
 import talib as ta
 import time
 import pandas as pd
+import numpy as np
 class BotBinance:
     __api_key = config.api_key
     __api_secret = config.api_secret
@@ -270,9 +271,6 @@ class BotBinance:
     def MACD(self, closes_serie, fastperiod:float = 90, slowperiod:float = 15, signalperiod:float = 20):
         return ta.MACD(closes_serie, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod)
     
-    def MFI(self, highs_serie,  lows_serie, closes_serie, volume_serie,  timeperiod:float = 20):
-        return ta.MFI(highs_serie, lows_serie, closes_serie, volume_serie ,  timeperiod=timeperiod)
-    
     def DEMA(self, closes_serie, timeperiod:float = 20):
         return ta.DEMA(closes_serie, timeperiod=timeperiod)
     
@@ -280,6 +278,17 @@ class BotBinance:
         return ta.BBANDS(closes_serie, timeperiod=timeperiod, nbdevup=nbdevup, nbdevdn=nbdevdn, matype=matype)
     def show_list(self, column: str, data):
         return list(map(lambda v: v[column], data))
+
+    def MFI(self, highs,  lows, closes, volume,  timeperiod:float = 14):
+        typical_price = (highs + lows + closes) / 3
+        raw_money_flow = typical_price * volume
+        positive_flow = np.where(typical_price.diff() > 0, raw_money_flow, 0)
+        negative_flow = np.where(typical_price.diff() < 0, raw_money_flow, 0)
+        positive_mf = pd.Series(positive_flow).rolling(window=timeperiod, min_periods=1).sum()
+        negative_mf = pd.Series(negative_flow).rolling(window=timeperiod, min_periods=1).sum()
+        money_ratio = positive_mf / negative_mf
+        mfi = 100 - (100 / (1 + money_ratio))
+        return mfi
 
     def heikin_ashi(self, candles):
         
@@ -291,19 +300,22 @@ class BotBinance:
         if len(candles) <= 1:
             return ha_open, ha_high, ha_low, ha_close
 
-        prev_close = candles[0]['Close_price']
-        for candle in candles[1:]:
-            open_price = (prev_close + candle['Open_price']) / 2
-            close_price = (open_price + candle['High_price'] + candle['Low_price'] + candle['Close_price']) / 4
-            high_price = max(open_price, candle['High_price'], close_price, candle['Low_price'])
-            low_price = min(open_price, candle['High_price'], close_price, candle['Low_price'])
+        # Inicialización de la primera vela Heikin-Ashi
+        ha_open.append(candles[0]['Open_price'])
+        ha_close.append((candles[0]['Open_price'] + candles[0]['High_price'] + candles[0]['Low_price'] + candles[0]['Close_price']) / 4)
+        ha_high.append(max(candles[0]['High_price'], ha_open[0], ha_close[0]))
+        ha_low.append(min(candles[0]['Low_price'], ha_open[0], ha_close[0]))
+
+        for i in range(1, len(candles)):
+            open_price = (ha_open[-1] + ha_close[-1]) / 2
+            close_price = (candles[i]['Open_price'] + candles[i]['High_price'] + candles[i]['Low_price'] + candles[i]['Close_price']) / 4
+            high_price = max(candles[i]['High_price'], open_price, close_price)
+            low_price = min(candles[i]['Low_price'], open_price, close_price)
 
             ha_open.append(open_price)
+            ha_close.append(close_price)
             ha_high.append(high_price)
             ha_low.append(low_price)
-            ha_close.append(close_price)
-
-            prev_close = close_price
 
         return ha_open, ha_high, ha_low, ha_close
     
