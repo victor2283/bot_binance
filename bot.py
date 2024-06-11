@@ -1,9 +1,9 @@
 import config
 from pprint import pprint
 from binance.spot import Spot
-import talib as ta
 import time
 import pandas as pd
+import numpy as np
 class BotBinance:
     __api_key = config.api_key
     __api_secret = config.api_secret
@@ -115,87 +115,101 @@ class BotBinance:
         bullish_divergences = []
         bearish_divergences = []
 
-        
-        # Identificar divergencias alcistas y bajistas
-        previous_max = data_values.iloc[0]  # Inicializar máximo anterior con primer valor
-        previous_min = data_values.iloc[0]  # Inicializar mínimo anterior con primer valor
+        # Detectar divergencias alcistas y bajistas
+        for i in range(1, len(data_values)):
+            # Detectar divergencia alcista
+            if close_prices.iloc[i] < close_prices.iloc[i - 1] and data_values.iloc[i] > data_values.iloc[i - 1]:
+                # Almacenar divergencia potencial
+                potential_bullish_div = (i, data_values.iloc[i], close_prices.iloc[i])
 
+                # Evaluar la divergencia potencial
+                is_valid = True
+                for j in range(i + 1, len(data_values)):
+                    if not (close_prices.iloc[j] < close_prices.iloc[j - 1] and data_values.iloc[j] > data_values.iloc[j - 1]):
+                        is_valid = False
+                        break
 
-        for i in range(len(data_values)): # Recorrer desde 0 hasta len(data_values) - 1
-            # Detectar divergencia alcista: El precio del activo está haciendo mínimos más bajos, mientras que el RSI está haciendo mínimos más altos.
-            if data_values.iloc[i] < previous_max and close_prices.iloc[i] > close_prices.iloc[i - 1]:
-                bullish_divergences.append((i, data_values.iloc[i], previous_max, close_prices.iloc[i], close_prices.iloc[i - 1]))
-                previous_max = data_values.iloc[i]  # Actualizar máximo anterior
-            
-            # Detectar divergencia bajista, El precio del activo está haciendo máximos más altos, mientras que el RSI está haciendo máximos más bajos.
-            if data_values.iloc[i] > previous_min and close_prices.iloc[i] < close_prices.iloc[i - 1]:
-                bearish_divergences.append((i, data_values.iloc[i], previous_min, close_prices.iloc[i], close_prices.iloc[i - 1]))
-                previous_min = data_values.iloc[i]  # Actualizar mínimo anterior
+                # Agregar divergencia válida
+                if is_valid:
+                    bullish_divergences.append(potential_bullish_div)
+
+            # Detectar divergencia bajista
+            if close_prices.iloc[i] > close_prices.iloc[i - 1] and data_values.iloc[i] < data_values.iloc[i - 1]:
+                # Almacenar divergencia potencial
+                potential_bearish_div = (i, data_values.iloc[i], close_prices.iloc[i])
+
+                # Evaluar la divergencia potencial
+                is_valid = True
+                for j in range(i + 1, len(data_values)):
+                    if not (close_prices.iloc[j] > close_prices.iloc[j - 1] and data_values.iloc[j] < data_values.iloc[j - 1]):
+                        is_valid = False
+                        break
+
+                # Agregar divergencia válida
+                if is_valid:
+                    bearish_divergences.append(potential_bearish_div)
+
         return {
-                "up_divergences": bullish_divergences,
-                "down_divergences": bearish_divergences
+            "up_divergences": bullish_divergences,
+            "down_divergences": bearish_divergences
         }
+
                 
-               
+    
+    def confirm_signal_macd(self, macd, signal, closes):
+        divergences = self.confirm_divergences(data_values=macd, close_prices=closes)
+        if len(divergences.get("up_divergences")) == 0 and len(divergences.get("down_divergences")) == 0:
+            if macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] < signal.iloc[-2]:
+                return "up"  # Cruce alcista
+            elif macd.iloc[-1] < signal.iloc[-1] and macd.iloc[-2] > signal.iloc[-2]:
+                return "down"  # Cruce bajista
+        else:
+            up_divergences = divergences.get("up_divergences")
+            if up_divergences is not None and len(up_divergences) > 0:
+                if len(up_divergences[-1]) > 0:
+                    return "up_div"
+
+            down_divergences = divergences.get("down_divergences")
+            if down_divergences is not None and len(down_divergences) > 0:
+                if len(down_divergences[-1]) > 0:
+                    return "up_div"
+            
     def confirm_signal_rsi(self, rsi, closes):
-        
         divergences = self.confirm_divergences(data_values=rsi, close_prices=closes)
-        
-        
-        if len(divergences.get("up_divergences")) == len(divergences.get("down_divergences"))==0:
+        if len(divergences.get("up_divergences")) == 0 and len(divergences.get("down_divergences")) == 0:
             if   rsi.iloc[-1] > 70:
                 return "down" 
         
             if rsi.iloc[-1] < 30:
                 return "up"           
         else:
-            #print("Divergencias alcistas:")
-            for divergence in divergences.get("up_divergences"):
-                print(f"Índice: {divergence[0]}, idicador: {divergence[1]}, {divergence[2]}, Precio: {divergence[3]}, {divergence[4]}")
-            
-            if  len(divergences.get("up_divergences")[-1]) > 0: 
-                return "up_divergence"
+            up_divergences = divergences.get("up_divergences")
+            if up_divergences is not None and len(up_divergences) > 0:
+                if len(up_divergences[-1]) > 0:
+                    return "up_div"
 
-            #print("\nDivergencias bajistas:")
-            for divergence in divergences.get("down_divergences"):
-                print(f"Índice: {divergence[0]}, indicador: {divergence[1]}, {divergence[2]}, Precio: {divergence[3]}, {divergence[4]}")
-            
-            if  len(divergences.get("down_divergences")[-1]) > 0: 
-                return "down_divergence"
+            down_divergences = divergences.get("down_divergences")
+            if down_divergences is not None and len(down_divergences) > 0:
+                if len(down_divergences[-1]) > 0:
+                    return "up_div"
     
-    def confirm_signal_macd(self, macd, signal, closes):
-        
-        divergences = self.confirm_divergences(data_values=macd, close_prices=closes)
-        
-        
-        if len(divergences.get("up_divergences")) == len(divergences.get("down_divergences"))==0:
-            if macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] < signal.iloc[-2]:
-                return "up"  # Cruce alcista
-            elif macd.iloc[-1] < signal.iloc[-1] and macd.iloc[-2] > signal.iloc[-2]:
-                return "down"  # Cruce bajista
-        else:
-            #print("Divergencias alcistas:")
-            for divergence in divergences.get("up_divergences"):
-                print(f"Índice: {divergence[0]}, idicador: {divergence[1]}, {divergence[2]}, Precio: {divergence[3]}, {divergence[4]}")
-            if  len(divergences.get("up_divergences")[-1]) > 0: 
-                return "up_divergence"
-
-            #print("\nDivergencias bajistas:")
-            for divergence in divergences.get("down_divergences"):
-                print(f"Índice: {divergence[0]}, indicador: {divergence[1]}, {divergence[2]}, Precio: {divergence[3]}, {divergence[4]}")
-            if  len(divergences.get("down_divergences")[-1]) > 0: 
-                return "down_divergence"
-            
+    def SMA(self, closes, timeperiod:float = 20):
+        sma = []
+        for i in range(len(closes)):
+            if i < timeperiod - 1:
+                sma.append(None)  # No hay suficientes datos para calcular la SMA
+            else:
+                sma.append(sum(closes[i-timeperiod+1:i+1]) / timeperiod)
+        return sma
+    
     def confirm_double_crossover(self, sma_min, sma_medium, sma_max): 
         if self.confirm_single_crossover(sma_min, sma_medium) == self.confirm_single_crossover(sma_medium, sma_max):
             return self.confirm_single_crossover(sma_medium, sma_max)
-       
     
     def confirm_single_crossover(self, sma_min, sma_max):
-
-        if sma_min.iloc[-1] > sma_max.iloc[-1] and sma_min.iloc[-2] < sma_max.iloc[-2]:
+        if sma_min[-1] > sma_max[-1] and sma_min[-2] < sma_max[-2]:
             return "up"
-        if sma_min.iloc[-1] < sma_max.iloc[-1] and sma_min.iloc[-2] > sma_max.iloc[-2]:
+        if sma_min[-1] < sma_max[-1] and sma_min[-2] > sma_max[-2]:
             return "down"
     
     def confirm_signal_sma(self, smaS, smaM, smaL):      
@@ -209,77 +223,66 @@ class BotBinance:
             elif self.confirm_single_crossover(sma_min= smaM, sma_max= smaL):
                 return self.confirm_single_crossover(sma_min= smaM, sma_max= smaL)
 
-    def confirm_signal_dema(self, dema, closes, price_market):
-        if price_market == closes.iloc[-1]:
-            if dema.iloc[-1] > closes.iloc[-1] and dema.iloc[-2] < closes.iloc[-2]:
-                return "up"
-            if dema.iloc[-1] > closes.iloc[-1] and dema.iloc[-2] < closes.iloc[-2]:
-                return "down"    
-    
-    def confirm_signal_all(self, data):
-        up_count = 0
-        down_count = 0
-        for signal in data:
-            if signal == "up" or signal == "up_divergence":
-                up_count += 1
-            elif signal == "down" or signal == "down_divergence":
-                down_count += 1
-            
-        if up_count > down_count:
-            return "up"
-        elif up_count < down_count:        
-            return "down"
-        
-    def user_asset(self, asset: str =""):
-        return self._request(endpoint="user_asset", parameters={"asset": asset})    
-    
-    def my_trades(self, symbol):
-        return self._request("my_trades", parameters={"symbol":symbol})
-    
-    def percPro(self, last_price, price):
-        return (abs(last_price - price) / (last_price + price)) * 100
-    
-
-    def min_crypto_buy(self):
-        #BTC_TRY 0.00001 ETH_TRY 0.0001 BTC_ARS 0.00003
-        pair = self.symbol
-        exchange_rates = {
-                'BTCTRY': 0.00001,
-                'ETHTRY': 0.0001,
-                'BTCARS': 0.00003,
-                'BTCUSDT': 0.00007,
-                'BTCUSDC': 0.9899,
-                'BTCFDUSD': 0.00007,
-                'FDUSDUSDT': 0.9987,
-                'FDUSDTRY': 1.0024,
-                'ETHBTC':0.000109, #EQUIVALE A 7.48 DOLARES
-                "BNBBTC": 0.012, #EQUIVALE A 7.48 DOLARES
-            }
-
-        return float(exchange_rates.get(pair, 0))
-    
     
     def series(self, closes):
         return pd.Series(closes)
-    def SMA(self, closes_serie, timeperiod:float = 20):
-        return ta.SMA(closes_serie, timeperiod=timeperiod)
     
-    def RSI(self, closes_serie, timeperiod:float = 20):
-        return ta.RSI(closes_serie, timeperiod=timeperiod)
+    def RSI(self, closes, timeperiod:float = 20):
+        delta = closes.diff(1)
+        # Separar las ganancias y pérdidas
+        gains = delta.where(delta > 0, 0)
+        losses = -delta.where(delta < 0, 0)
+        # Calcular la media de ganancias y pérdidas
+        avg_gain = gains.rolling(window=timeperiod, min_periods=1).mean()
+        avg_loss = losses.rolling(window=timeperiod, min_periods=1).mean()
+        # Calcular la fuerza relativa (RS)
+        rs = avg_gain / avg_loss
+        # Calcular el RSI
+        return 100 - (100 / (1 + rs))
+
+    def calculate_ema(self, series, timeperiod:float = 20):
+        
+        return series.ewm(span=timeperiod, adjust=False).mean()
     
-    def MACD(self, closes_serie, fastperiod:float = 90, slowperiod:float = 15, signalperiod:float = 20):
-        return ta.MACD(closes_serie, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod)
+    def MACD(self, closes, fastperiod:float = 12, slowperiod:float = 26, signalperiod:float = 9):
+        # Calcular las EMAs rápidas y lentas
+        ema_fast = self.calculate_ema(closes, fastperiod)
+        ema_slow = self.calculate_ema(closes, slowperiod)
+   
+        # Calcular la línea MACD
+        macd = ema_fast - ema_slow
     
-    def MFI(self, highs_serie,  lows_serie, closes_serie, volume_serie,  timeperiod:float = 20):
-        return ta.MFI(highs_serie, lows_serie, closes_serie, volume_serie ,  timeperiod=timeperiod)
+        # Calcular la línea de señal
+        macdsignal = self.calculate_ema(macd, signalperiod)
     
-    def DEMA(self, closes_serie, timeperiod:float = 20):
-        return ta.DEMA(closes_serie, timeperiod=timeperiod)
+        # Calcular el histograma
+        macdhist = macd - macdsignal
+        
+        return macd, macdsignal, macdhist
     
-    def BBANDS(self, closes_serie, timeperiod:float = 20, nbdevup: int = 2, nbdevdn:int = 2, matype:int =0):
-        return ta.BBANDS(closes_serie, timeperiod=timeperiod, nbdevup=nbdevup, nbdevdn=nbdevdn, matype=matype)
+    def BBANDS(self, closes, timeperiod:float = 20, nbdevup: float = 2, nbdevdn: float = 2):
+        rolling_mean = closes.rolling(window=timeperiod).mean()
+        rolling_std = closes.rolling(window=timeperiod).std()
+        middleband = rolling_mean
+        upperband = rolling_mean + (rolling_std * nbdevup)
+        lowerband = rolling_mean - (rolling_std * nbdevdn)
+        return upperband, middleband, lowerband
+
+
+    
     def show_list(self, column: str, data):
         return list(map(lambda v: v[column], data))
+
+    def MFI(self, highs,  lows, closes, volume,  timeperiod:float = 14):
+        typical_price = (highs + lows + closes) / 3
+        raw_money_flow = typical_price * volume
+        positive_flow = np.where(typical_price.diff() > 0, raw_money_flow, 0)
+        negative_flow = np.where(typical_price.diff() < 0, raw_money_flow, 0)
+        positive_mf = pd.Series(positive_flow).rolling(window=timeperiod, min_periods=1).sum()
+        negative_mf = pd.Series(negative_flow).rolling(window=timeperiod, min_periods=1).sum()
+        money_ratio = positive_mf / negative_mf
+        mfi = 100 - (100 / (1 + money_ratio))
+        return mfi
 
     def heikin_ashi(self, candles):
         
@@ -369,9 +372,42 @@ class BotBinance:
                 return 'consolidation'
             else:
                 return 'neutral'
-
-
-
+    def stop_price(self, side:str = "", price:float =0, perc_stop: float=0.035, perc_price: float= 0.0185):
+        stopPriceSide= 0
+        priceSide = 0
+        if side =="BUY":
+            stopPriceSide=  int(price + price * perc_stop /100)
+            priceSide= int(stopPriceSide + stopPriceSide * perc_price  /100) 
+            
+        elif side=="SELL":    
+            stopPriceSide=  int(price - price * perc_stop /100)
+            priceSide= int(stopPriceSide - stopPriceSide * perc_price  /100) 
+        return stopPriceSide, priceSide
     
+    def user_asset(self, asset: str =""):
+        return self._request(endpoint="user_asset", parameters={"asset": asset})    
     
+    def my_trades(self, symbol):
+        return self._request("my_trades", parameters={"symbol":symbol})
+    
+    def percPro(self, last_price, price):
+        return (abs(last_price - price) / (last_price + price)) * 100
+
+    def min_crypto_buy(self):
+        #BTC_TRY 0.00001 ETH_TRY 0.0001 BTC_ARS 0.00003
+        pair = self.symbol
+        exchange_rates = {
+                'BTCTRY': 0.00001,
+                'ETHTRY': 0.0001,
+                'BTCARS': 0.00003,
+                'BTCUSDT': 0.00007,
+                'BTCUSDC': 0.9899,
+                'BTCFDUSD': 0.00007,
+                'FDUSDUSDT': 0.9987,
+                'FDUSDTRY': 1.0024,
+                'ETHBTC':0.000109, #EQUIVALE A 7.48 DOLARES
+                "BNBBTC": 0.012, #EQUIVALE A 7.48 DOLARES
+            }
+
+        return float(exchange_rates.get(pair, 0))
     
