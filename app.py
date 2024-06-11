@@ -26,19 +26,18 @@ price_buy = 0
 nbdevup= 2
 nbdevdn=2
 orderId=0
-stop_loss_pct = 0.035
-take_profit_pct = 0.035
-perc_max= 0.51
-perc_min = 0.34
 last_order_tradeId =0
 sTrade =0
 last_trend=""
+perc_stopSide= 0.035
+perc_priceSide=0.0185
 while True:
     price_market = bot.symbol_price(symbol)
     alert_band=""
     alert_mfi=""
     alert_rsi=""
     alert_macd=""
+    alert_sma=""
     highs = bot.show_list(column='High_price', data=candles)
     lows = bot.show_list(column='Low_price', data=candles)
     closes= bot.show_list(column='Close_price', data=candles)
@@ -51,7 +50,11 @@ while True:
     upperband, middleband, lowerband = bot.BBANDS(closes=closes_serie, timeperiod=lPd, nbdevup=nbdevup, nbdevdn=nbdevdn)
     rsi = bot.RSI(closes=closes_serie, timeperiod=sPd)
     macd, macdsignal, macdhist = bot.MACD(closes=closes_serie, fastperiod=sPd*2, slowperiod=sPd*3, signalperiod=sPd)
-    
+    smaS= bot.SMA(closes=closes_serie, timeperiod=sPd)
+    smaM= bot.SMA(closes=closes_serie, timeperiod=mPd)
+    smaL= bot.SMA(closes=closes_serie, timeperiod=lPd)
+    if bot.confirm_signal_sma(smaS, smaM, smaL):
+        alert_sma=bot.confirm_signal_sma(smaS, smaM, smaL)
     if bot.confirm_signal_macd(macd, macdsignal, closes=closes_serie):
         alert_macd = bot.confirm_signal_macd(macd, macdsignal, closes=closes_serie)
     if bot.confirm_signal_rsi(rsi=rsi, closes=closes_serie):
@@ -92,17 +95,17 @@ while True:
             sTrade = sTrade + 1
             last_order_tradeId= order_trade['orderId']
     
-    msg = f"ear:{float(ear):.{3}f} = {asset_secundary}: {float(fiat):.{2}f} + {asset_primary}: {float(quantity):.{8}f}"
     trend, entry_signal, exit_signal = bot.analyze_trend_and_signals(candles=candles)
-    
+    print_ear = f"ear:{float(ear):.{3}f} = {asset_secundary}: {float(fiat):.{2}f} + {asset_primary}: {float(quantity):.{8}f}"
+    print_signals= f"alert:[{trend}] band:[{alert_band}] mfi:[{alert_mfi}] rsi:[{alert_rsi}] sma:[{alert_sma}]"
     #price sell***
-    stopPriceSell=  int(price_market - price_market * 0.035 /100)
-    priceSell= int(stopPriceSell - stopPriceSell * 0.0185 /100)
-    
-    #****
+    stopPriceSide, priceSide = bot.stop_price(side="SELL", price=price_market, perc_stop=perc_stopSide, perc_price=perc_priceSide)
+    stopPriceSell=  stopPriceSide
+    priceSell= priceSide
     #priceBuy *****
-    stopPriceBuy=  int(price_market + price_market * 0.040 /100)
-    priceBuy= int(stopPriceBuy + stopPriceBuy * 0.018  /100) 
+    stopPriceSide, priceSide = bot.stop_price(side="BUY", price=price_market, perc_stop=perc_stopSide, perc_price=perc_priceSide)
+    stopPriceBuy=  stopPriceSide
+    priceBuy= priceSide
     buy_quantity =float(math.floor(fiat / priceBuy/price_min_sell)* price_min_sell) # calculo market buy
 
     #****
@@ -111,7 +114,7 @@ while True:
         cancel_order= bot.get_orderId(orderId= orderId)
         aux_price = float(cancel_order['price'])
         aux_side = cancel_order['side']
-        print(f" Trade: [{sTrade}] | alert:[{trend}] band:[{alert_band}] mfi:[{alert_mfi}] rsi:[{alert_rsi}]  | Price: {round(price_market,2)} | {msg} | buy price: {round(aux_price,2)}")    
+        print(f" Trade: [{sTrade}] | {print_signals} | Price: {round(price_market,2)} | {print_ear} | buy price: {round(aux_price,2)}")    
         if (last_trend=="consolidation" or last_trend=="neutral")   and ((trend == "up" and aux_side == "SELL" and priceSell > aux_price) or (trend== "down" and aux_side == "BUY" and priceBuy < aux_price)):
             if bot.get_orderId(orderId= orderId)['status']  == "NEW": 
                 rs= bot.cancel_orderId(orderId= orderId)
@@ -120,18 +123,17 @@ while True:
     else:
         if price_buy > 0 and (quantity > price_min_sell and fiat < price_min_buy):
             perc_stop_loss= round(float(bot.percPro(last_price=price_buy, price=priceSell)),2)
-            print(f" Trade: [{sTrade}] | alert:[{trend}] band:[{alert_band}] mfi:[{alert_mfi}] rsi:[{alert_rsi}]  | Price: {round(price_market,2)} | {msg} | buy price: {price_buy} perc:{perc_stop_loss}")
-            if  (perc_stop_loss > perc_binance * 1.035  and  priceSell > price_buy) or (price_market < lowerband.iloc[-1] and last_trend=="consolidation" and  trend =="down" and  exit_signal ==True and  priceSell >= price_buy): #sell
+            print(f" Trade: [{sTrade}] | {print_signals} | Price: {round(price_market,2)} | {print_ear} | buy price: {price_buy} perc:{perc_stop_loss}")
+            if alert_mfi== "down" and alert_sma !="up" and alert_rsi !="up_div" and alert_macd !="up_div" and  ((priceSell < price_buy and perc_stop_loss > perc_binance * 0.19) or  (priceSell > price_buy and perc_stop_loss > perc_binance * 1.19)):
                 result = bot.new_order(side="SELL",type="STOP_LOSS_LIMIT", quantity= float(math.floor(quantity/price_min_sell)* price_min_sell), stopPrice= stopPriceSell, price=priceSell, mode=mode_Soft)                                
                 if len(result)>0:
                     rs =bot.get_orderId(orderId= result["orderId"])
                     print(f"order type: {rs['type']} | ID: {rs['orderId']} | status: {rs['status']} | price:{round(float(rs['price']),2)}")
             
-
         elif price_buy == 0 and (quantity < price_min_sell and fiat >= price_min_buy): 
             perc_stop_loss= round(float(bot.percPro(last_price=price_buy, price=priceBuy)),2)
-            print(f" Trade: [{sTrade}] | alert:[{trend}] band:[{alert_band}] mfi:[{alert_mfi}] rsi:[{alert_rsi}]  | Price: {round(price_market,2)} | {msg} |  buy price: {price_buy} ")
-            if price_market < lowerband.iloc[-1] and alert_mfi== "up" and entry_signal == True: 
+            print(f" Trade: [{sTrade}] | {print_signals} | Price: {round(price_market,2)} | {print_ear} |  buy price: {price_buy} ")
+            if  alert_sma != "down" and price_market < lowerband.iloc[-1] and alert_mfi== "up" and alert_rsi !="down_div" and alert_macd !="down_div" and entry_signal == True: 
                 print(f" buscando precio de compra... al precio: {last_price_market} | alert: {alert_band}")
                 result = bot.new_order(side="BUY",type="STOP_LOSS_LIMIT",quantity= buy_quantity, stopPrice= stopPriceBuy,price=priceBuy, mode=mode_Soft)
                 if len(result)>0:
