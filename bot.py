@@ -4,6 +4,7 @@ from binance.spot import Spot
 import time
 import pandas as pd
 import numpy as np
+import datetime
 class BotBinance:
     __api_key = config.api_key
     __api_secret = config.api_secret
@@ -37,12 +38,23 @@ class BotBinance:
         return candles
 
 
-
     def candlestick(self):
         candles = self._request(endpoint="klines", parameters={
                                 "symbol": self.symbol, "interval": self.interval, "limit": self.limit})
         return list(map(lambda v: {'Open_time': int(v[0]), 'Open_price': float(v[1]), 'High_price': float(v[2]), 'Low_price': float(v[3]), 'Close_price': float(v[4]), "Volume": float(v[5])}, candles))
 
+    def create_dataframe(self, candles):
+        df = pd.DataFrame({
+            'Datetime': [datetime.datetime.fromtimestamp(candle['Open_time'] / 1000) for candle in candles],
+            'Open': [candle['Open_price'] for candle in candles],
+            'High': [candle['High_price'] for candle in candles],
+            'Low': [candle['Low_price'] for candle in candles],
+            'Close': [candle['Close_price'] for candle in candles],
+            'Volume': [candle['Volume'] for candle in candles],
+        })
+        df.set_index('Datetime', inplace=True)
+        return df
+    
     def new_order(self, side: str,  type: str, quantity: float = 0, price: float = 0, stopPrice: float = 0, mode: int = 1):
         timestamp = int(time.time()*1000)
         params={}    
