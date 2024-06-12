@@ -1,13 +1,20 @@
-import tkinter as tk
+from bot import BotBinance
 from tkinter import messagebox
+import tkinter as tk
+import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import matplotlib.dates as mdates
-from bot import BotBinance
-import time
-from pprint import pprint
+import matplotlib.pyplot as plt
+import mplfinance as mpf
+from mplfinance.original_flavor import candlestick_ohlc
+import pandas as pd
 import math
 import datetime
+from matplotlib.dates import date2num
+
+import time
+from pprint import pprint
 
 
 mode_Soft=1 # modo 0 como demo - modo 1 produccion con datos reales
@@ -33,7 +40,7 @@ perc_stopSide= 0.035
 perc_priceSide=0.0185
 running = False  # Estado del bot
 candles=[]
-candles = bot.candlestick()
+
 # Crear la ventana principal
 root = tk.Tk()
 root.title("Bot de Trading")
@@ -52,6 +59,7 @@ frame_bottom.pack(pady=10)
 # Función para actualizar los datos
 def update_data():
     global candles, price_market, last_price_market, ear, last_order_tradeId, sTrade, last_trend
+    candles = bot.candlestick()
     if not running:
         return
     
@@ -90,6 +98,7 @@ def update_data():
         alert_mfi = bot.confirm_mfi(mfi=mfi)
     if bot.confirm_band(price_market, upperband, middleband, lowerband):
         alert_band = bot.confirm_band(price_market, upperband, middleband, lowerband)
+
     price_min_buy = price_market * price_min_sell    
     if len(bot.user_asset(asset=asset_primary)) > 0:
         quantity = float(bot.user_asset(asset_primary)[0]["free"])
@@ -185,7 +194,8 @@ def update_data():
     
     last_trend= trend
     last_price_market = price_market
-    candles = bot.addcandle(candles)
+    #candles = bot.addcandle(candles)
+
 def start_bot():
     global running
     running = True
@@ -195,60 +205,80 @@ def stop_bot():
     global running
     running = False
     messagebox.showinfo("Stop Bot..", "bot status = stop.")
-def manual_update():
-    update_data()
-# Crear botones y colocarlos en el frame_top
-button_start = tk.Button(frame_top, text="start bot", command=start_bot)
-button_start.grid(row=0, column=4, padx=3)
 
-button_stop = tk.Button(frame_top, text="stop Bot", command=stop_bot)
-button_stop.grid(row=0, column=5, padx=3)
 
-button_update = tk.Button(frame_top, text="update", command=manual_update)
-button_update.grid(row=0, column=6, padx=3)
+button_start = tk.Button(frame_middle, text="start bot", command=start_bot)
+button_start.grid(row=0, column=0,  columnspan=3, padx=3)
+
+button_stop = tk.Button(frame_middle, text="stop Bot", command=stop_bot)
+button_stop.grid(row=0, column=3, columnspan=3, padx=3)
+
+
 
 # Crear widgets
 label_price = tk.Label(frame_top, text="Price Market: ", font=("Arial", 14))
-label_price.grid(row=0, column=1, columnspan=3, pady=5)
+label_price.grid(row=0, column=0, columnspan=3, pady=3)
+
+label_ear = tk.Label(frame_top, text="Ear: ", font=("Arial", 13))
+label_ear.grid(row=0, column=5, columnspan=3, pady=3)
+
+label_alerts = tk.Label(frame_top, text="Alerts: ", font=("Arial", 12))
+label_alerts.grid(row=1, column=1, columnspan=3, pady=3)
+
+label_msg = tk.Label(frame_top, text="Msg: ", font=("Arial", 12))
+label_msg.grid(row=1, column=6, columnspan=3, pady=3)
 
 
-label_alerts = tk.Label(frame_middle, text="Alerts: ", font=("Arial", 12))
-label_alerts.grid(row=1, column=0, columnspan=3, pady=5)
 
-label_msg = tk.Label(frame_middle, text="Msg: ", font=("Arial", 14))
-label_msg.grid(row=2, column=0, columnspan=3, pady=5)
-
-label_ear = tk.Label(frame_bottom, text="Ear: ", font=("Arial", 14))
-label_ear.grid(row=1, column=3, columnspan=3, pady=5)
-# Función para actualizar el gráfico
 def update_chart(candles, closes, upperband, lowerband, smaS, smaM, smaL, rsi):
     fig.clear()
-    
+
     # Subgráfico de velas e indicadores
-    ax1 = fig.add_subplot(3, 1, 1)
-    ax1.xaxis_date()
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+    ax1 = fig.add_subplot(2, 1, 1)
+    ax1.set_ylabel('Price')
+    df = bot.create_dataframe(candles)
+    df['Datetime'] = df.index.map(mdates.date2num)
+    ohlc = df[['Datetime', 'Open', 'High', 'Low', 'Close']].values
+    # Crear el gráfico de velas
+    candlestick_ohlc(
+        ax=ax1,
+        quotes=ohlc,
+        width=0.00095,  # Ajustar el ancho de las velas
+        colorup='green',  # Color de las velas alcistas
+        colordown='red',  # Color de las velas bajistas
+    )
+ 
+
     
     dates = [datetime.datetime.fromtimestamp(candle['Open_time'] / 1000) for candle in candles]
-    ax1.plot(dates, closes, label='Close Prices')
-    ax1.plot(dates, upperband, label='Upper Band')
-    ax1.plot(dates, lowerband, label='Lower Band')
-    ax1.plot(dates, smaS, label='SMA Short')
-    ax1.plot(dates, smaM, label='SMA Medium')
-    ax1.plot(dates, smaL, label='SMA Long')
-    ax1.legend()
+    # Graficar los otros indicadores
+    ax1.plot(dates, closes, label='Closes prices', color='black', linewidth=0.5)
+    ax1.plot(dates, upperband, label='Upper Band', color='blue', linewidth=0.5)
+    ax1.plot(dates, lowerband, label='Lower Band', color='red', linewidth=0.5)
+    ax1.plot(dates, smaS, label='SMA Short', color='orange', linewidth=0.5)
+    ax1.plot(dates, smaM, label='SMA Medium', color='purple', linewidth=0.5)
+    ax1.plot(dates, smaL, label='SMA Long', color='green', linewidth=0.5)
+    ax1.legend(loc='upper left', fontsize='small')
+
+    
     
     # Subgráfico de RSI
-    ax2 = fig.add_subplot(3, 1, 2)
-    ax2.plot(dates, rsi, label='RSI')
-    ax2.legend()
-    
-    canvas.draw()
+    ax2 = fig.add_subplot(2, 1, 2)
+    ax2.plot(dates, rsi, label='RSI', color='blue')
+    ax2.legend(loc='upper left', fontsize='small')
 
-# Crear el gráfico de Matplotlib
+    # Ajustar el espaciado entre subgráficos
+    fig.tight_layout(pad=1.0)
+
+    canvas.draw()    
+
+# Crear la figura de Matplotlib
 fig = Figure(figsize=(10, 6), dpi=100)
+
+# Crear el lienzo de Matplotlib para Tkinter
 canvas = FigureCanvasTkAgg(fig, master=root)
 canvas.get_tk_widget().pack()
+
 
 # Iniciar la aplicación
 root.mainloop()
