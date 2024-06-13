@@ -5,6 +5,11 @@ import time
 import pandas as pd
 import numpy as np
 import datetime
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+import matplotlib.dates as mdates
+from mplfinance.original_flavor import candlestick_ohlc
+
 class BotBinance:
     __api_key = config.api_key
     __api_secret = config.api_secret
@@ -422,4 +427,34 @@ class BotBinance:
             }
 
         return float(exchange_rates.get(pair, 0))
+    
+    def update_chart(self, candles, closes, upperband, lowerband, smaS, smaM, smaL, fig):
+        # Crear el subgráfico de velas e indicadores
+        ax1 = fig.add_subplot(1, 1, 1)
+        ax1.set_ylabel('Price')
+        ax1.set_xlabel('Time')
+        df = self.create_dataframe(candles)
+        df['Datetime'] = df.index.map(mdates.date2num)
+        
+        # Ajustar el ancho de las velas
+        ohlc = df[['Datetime', 'Open', 'High', 'Low', 'Close', 'Volume']].values
+        candlestick_ohlc(ax=ax1, quotes=ohlc, width=0.0001, colorup='green', colordown='red') # Aumentar el ancho de las velas
+        
+        # Graficar los otros indicadores
+        ax1.plot(df['Datetime'], closes, label='Closes prices', color='black', linewidth=0.8)
+        ax1.plot(df['Datetime'], upperband, label='Upper Band', color='blue', linewidth=0.8)
+        ax1.plot(df['Datetime'], lowerband, label='Lower Band', color='red', linewidth=0.8)
+        ax1.plot(df['Datetime'], smaS, label='SMA Short', color='orange', linewidth=0.8)
+        ax1.plot(df['Datetime'], smaM, label='SMA Medium', color='purple', linewidth=0.8)
+        ax1.plot(df['Datetime'], smaL, label='SMA Long', color='green', linewidth=0.8)
+        
+        # Añadir la leyenda para los indicadores de precios
+        ax1.legend(loc='upper left', fontsize='small')
+        
+        # Ajustar los límites del eje y para mejorar la visualización
+        ax1.set_ylim(min(df['Low'])-min(df['Low'])*1.3/100, max(df['High'])+ max(df['High'])*1.3/100)
+        
+        # Ajustar el espaciado entre subgráficos
+        fig.tight_layout(pad=0.8)
+        return fig
     
